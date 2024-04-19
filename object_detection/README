@@ -41,3 +41,17 @@ Step 2: Run the python script
 	ros2 run ros2_opencv camera_sensor_subscriber
 
 This should open a window in a couple seconds showing you what is being detected / the pose of the object.
+
+=====================================================================================
+
+=== Calibrating Camera ===
+
+The camera needs to be calibrated in the sense of calculating the distance it is from the groud.
+This is to calculate the distance of the block as well as getting the pose of the camera in reference to the leo rover / arm
+
+Therefore I included a file:
+
+	./src/ros2_opencv/ros2_opencv/calculate.py
+
+Where you can input the depth of the block from the camera at specific distances, then prints the average calcualted height of the camera
+

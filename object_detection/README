@@ -46,7 +46,7 @@ This should open a window in a couple seconds showing you what is being detected
 
 === Calibrating Camera ===
 
-The camera needs to be calibrated in the sense of calculating the distance it is from the groud.
+The camera needs to be calibrated in the sense of calculating the distance it is from the ground.
 This is to calculate the distance of the block as well as getting the pose of the camera in reference to the leo rover / arm
 
 Therefore I included a file:

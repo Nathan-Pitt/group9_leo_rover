@@ -1,13 +1,43 @@
-Open terminal then transition to:
+================= How to Launch and Operate Camera Object Detection =================
 
-	cd ./ros_open_cv
+=== Launching Realsense Camera ===
+
+If you haven't launched the realsense camera on your device before, you might need to download the SDK and ros packages.
+If you have already downloaded the SDK and packages, skip to step 3.
+
+Step 1: Install latest Intel® RealSense™ SDK 2.0
+
+	sudo apt install ros-humble-librealsense2*
+
+Step 2: Install debian package from ROS servers
+
+	sudo apt install ros-humble-realsense2-*
+
+Step 3: Run Realsense Camera Node
+
+	ros2 launch realsense2_camera rs_launch.py depth_module.profile:=848x480x30 rgb_camera.profile:=848x480x30 align_depth.enable:=true
+
+This should launch the node and have the depth to colour frames aligned. Next is running the object detection
+
+=====================================================================================
+
+=== Launching Object Detection ===
+
+You might need to install some packages, the one that I know of is:
+
+	pip install pyrealsense2
+
+If there are any more and/or the file doesn't run, please let me know.
+Download the object detection package in this github.
+
+Step 1: Open a terminal then transition to the base of the package, making sure to colcon build and source.
+
+	cd ./object_detection
 	colcon build
 	source install/setup.bash
 
-Open another terminal and do:
-	
-	ros2 launch realsense2_camera rs_launch.py depth_module.profile:=848x480x30 rgb_camera.profile:=848x480x30 align_depth.enable:=true
-
-In the original terminal do:
+Step 2: Run the python script
 
 	ros2 run ros2_opencv camera_sensor_subscriber
+
+This should open a window in a couple seconds showing you what is being detected / the pose of the object.

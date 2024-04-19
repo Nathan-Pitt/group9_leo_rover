@@ -1,0 +1,13 @@
+Open terminal then transition to:
+
+	cd ./ros_open_cv
+	colcon build
+	source install/setup.bash
+
+Open another terminal and do:
+	
+	ros2 launch realsense2_camera rs_launch.py depth_module.profile:=848x480x30 rgb_camera.profile:=848x480x30 align_depth.enable:=true
+
+In the original terminal do:
+
+	ros2 run ros2_opencv camera_sensor_subscriber

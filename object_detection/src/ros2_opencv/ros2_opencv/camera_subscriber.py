@@ -3,11 +3,13 @@ import cv2
 import numpy as np
 import pyrealsense2 as rs2
 import math
+import tf2_ros
+import tf2_geometry_msgs
 
 from decimal import Decimal, ROUND_HALF_UP
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, TransformStamped, Vector3
 from cv_bridge import CvBridge, CvBridgeError
 
 
@@ -252,6 +254,7 @@ class ImageSubscriber(Node):
         self.rgb = None
         self.depth = None
         self.intrinsics = None
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.block_location = Point()
         self.block_location.x = 0.0
         self.depth_to_colour = np.array([[9.99817193e-01, -1.88460015e-02, -3.22036049e-03, 1.50303664e-02],
@@ -293,6 +296,24 @@ class ImageSubscriber(Node):
         self.pub_block_location.publish(self.block_location)
         self.get_logger().info(f'Publishing block location of: X: {self.block_location.x} | Y: {self.block_location.y}'
                                f' | Z: {self.block_location.z}')
+
+        transform_camera_to_robot_base = TransformStamped()
+        transform_camera_to_robot_base.header.stamp = self.get_clock().now().to_msg()
+        transform_camera_to_robot_base.header.frame_id = 'robot_base'
+        transform_camera_to_robot_base.child_frame_id = 'camera_frame'
+        transform_camera_to_robot_base.transform.translation = Vector3(x=0.0, y=0.7,
+                                                                       z=0.0)  # Translation of 700mm in the y
+        self.tf_broadcaster.sendTransform(transform_camera_to_robot_base)
+
+        # Broadcast transform between camera and object frame
+        transform_object_to_camera = TransformStamped()
+        transform_object_to_camera.header.stamp = self.get_clock().now().to_msg()
+        transform_object_to_camera.header.frame_id = 'camera_frame'
+        transform_object_to_camera.child_frame_id = 'object_frame'
+        transform_object_to_camera.transform.translation = Vector3(x=-self.block_location.x, y=-self.block_location.z,
+                                                                   z=-self.block_location.y)
+        transform_object_to_camera.transform.rotation.w = 1.0  # No rotation
+        self.tf_broadcaster.sendTransform(transform_object_to_camera)
 
     def rgb_callback(self, rgb_data: Image):
         self.get_logger().info('Receiving rgb video frame')

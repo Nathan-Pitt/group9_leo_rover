@@ -53,5 +53,5 @@ Therefore I included a file:
 
 	./src/ros2_opencv/ros2_opencv/calculate.py
 
-Where you can input the depth of the block from the camera at specific distances, then prints the average calcualted height of the camera
+Where you can input the depth of the block from the camera at specific distances, then prints the average calculated height of the camera
 

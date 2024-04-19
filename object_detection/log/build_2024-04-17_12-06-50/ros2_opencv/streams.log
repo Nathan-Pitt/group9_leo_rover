@@ -1,0 +1,28 @@
+[0.413s] Invoking command in '/home/mscrobotics2324laptop2/ros_open_cv/src/ros2_opencv': CONDA_PROMPT_MODIFIER=(base) PYTHONPATH=/home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/prefix_override:/home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py egg_info --egg-base ../../build/ros2_opencv build --build-base /home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/build install --record /home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/install.log --single-version-externally-managed
+[0.544s] running egg_info
+[0.544s] writing ../../build/ros2_opencv/ros2_opencv.egg-info/PKG-INFO
+[0.545s] writing dependency_links to ../../build/ros2_opencv/ros2_opencv.egg-info/dependency_links.txt
+[0.545s] writing entry points to ../../build/ros2_opencv/ros2_opencv.egg-info/entry_points.txt
+[0.545s] writing requirements to ../../build/ros2_opencv/ros2_opencv.egg-info/requires.txt
+[0.545s] writing top-level names to ../../build/ros2_opencv/ros2_opencv.egg-info/top_level.txt
+[0.547s] reading manifest file '../../build/ros2_opencv/ros2_opencv.egg-info/SOURCES.txt'
+[0.548s] writing manifest file '../../build/ros2_opencv/ros2_opencv.egg-info/SOURCES.txt'
+[0.548s] running build
+[0.548s] running build_py
+[0.548s] copying ros2_opencv/camera_subscriber.py -> /home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/build/lib/ros2_opencv
+[0.549s] running install
+[0.549s] /usr/lib/python3/dist-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.
+[0.549s]   warnings.warn(
+[0.549s] running install_lib
+[0.550s] copying /home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/build/lib/ros2_opencv/camera_subscriber.py -> /home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/python3.10/site-packages/ros2_opencv
+[0.550s] byte-compiling /home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/python3.10/site-packages/ros2_opencv/camera_subscriber.py to camera_subscriber.cpython-310.pyc
+[0.552s] running install_data
+[0.552s] running install_egg_info
+[0.553s] removing '/home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/python3.10/site-packages/ros2_opencv-0.0.0-py3.10.egg-info' (and everything under it)
+[0.553s] Copying ../../build/ros2_opencv/ros2_opencv.egg-info to /home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/python3.10/site-packages/ros2_opencv-0.0.0-py3.10.egg-info
+[0.554s] running install_scripts
+[0.574s] Installing camera_sensor_publisher script to /home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/ros2_opencv
+[0.574s] Installing camera_sensor_subscriber script to /home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/ros2_opencv
+[0.574s] Installing show_center_depth script to /home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/ros2_opencv
+[0.575s] writing list of installed files to '/home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/install.log'
+[0.593s] Invoked command in '/home/mscrobotics2324laptop2/ros_open_cv/src/ros2_opencv' returned '0': CONDA_PROMPT_MODIFIER=(base) PYTHONPATH=/home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/prefix_override:/home/mscrobotics2324laptop2/ros_open_cv/install/ros2_opencv/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py egg_info --egg-base ../../build/ros2_opencv build --build-base /home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/build install --record /home/mscrobotics2324laptop2/ros_open_cv/build/ros2_opencv/install.log --single-version-externally-managed

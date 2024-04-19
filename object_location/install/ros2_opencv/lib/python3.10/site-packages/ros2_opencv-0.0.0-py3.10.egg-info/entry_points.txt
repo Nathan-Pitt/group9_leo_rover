@@ -1,4 +1,0 @@
-[console_scripts]
-camera_sensor_publisher = ros2_opencv.camera_publisher:main
-camera_sensor_subscriber = ros2_opencv.camera_subscriber:main
-

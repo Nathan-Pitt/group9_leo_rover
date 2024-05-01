@@ -14,6 +14,9 @@ from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import Point, TransformStamped, Vector3
 from cv_bridge import CvBridge, CvBridgeError
 
+import os
+import subprocess
+
 # Global variables to easily change when needed.
 
 # Bounds for saturation finding
@@ -31,9 +34,12 @@ TOLERANCE = 50  # 60
 distance_to_block = np.zeros((5, 5))
 index = 0
 
-# Check if the block to too close for a long period of time
+# Check if the block to too close / stable for a long period of time
 object_close = 0
 
+block_stable = 0
+stable_block_z = 0
+stable_block_x = 0
 
 def print_text_center(text, image):
     # Function to print a specified text on screen.
@@ -179,7 +185,7 @@ def object_detection(image, depth, intrinsics):
                 object_close += 1
             else:
                 # Get the distance to a grouping of pixels around center
-                tolerance = 3
+                tolerance = 2
 
                 try:
                     distance_to_block[index][0] = depth[v][u]
@@ -195,7 +201,7 @@ def object_detection(image, depth, intrinsics):
 
                 # Increment index but not to equal 5
                 index = (index + 1) % 5
-                print(f"Depth: {depth[v][u]} | Average Distance: {np.mean(distance_to_block)}")
+                # print(f"Depth: {depth[v][u]} | Average Distance: {np.mean(distance_to_block)}")
 
             # Convert the 2D array of distance to block to new array of averages of each row
             average_distance = np.mean(distance_to_block, axis=1)
@@ -214,7 +220,7 @@ def object_detection(image, depth, intrinsics):
             y_temp = np.mean(distance) * ((v - intrinsics.ppy) / intrinsics.fy)
             z_temp = np.mean(distance)  # np.sqrt(np.abs((390**2) - np.mean(distance)**2))
 
-            print(f'x_temp: {x_temp} | y_temp: {y_temp} | z_temp: {z_temp}')
+            # print(f'x_temp: {x_temp} | y_temp: {y_temp} | z_temp: {z_temp}')
 
             # Do additional math such as centering offset and angle of camera
             x_target = x_temp - 35
@@ -271,8 +277,10 @@ class ImageSubscriber(Node):
         transform_camera_to_robot_base.header.frame_id = 'px150/base_link'
         transform_camera_to_robot_base.child_frame_id = 'realsense/camera_frame'
         transform_camera_to_robot_base.transform.translation = Vector3(x=0.0,
-                                                                       y=0.7,
-                                                                       z=0.58)  # Translation of 700mm in the y
+                                                                       y=0.0,
+                                                                       z=0.0)
+        # x=0.0, y=0.7, z=0.58
+
         self.tf_broadcaster.sendTransform(transform_camera_to_robot_base)
 
         # Subscribe to RGB image
@@ -303,12 +311,16 @@ class ImageSubscriber(Node):
             msg_type=Point,
             topic='/block/location',
             qos_profile=10)
-        self.timer = self.create_timer(0.1, self.publish_block_location)
+        self.timer = self.create_timer(0.5, self.publish_block_location)
 
     def publish_block_location(self):
+        global block_stable
+        global stable_block_z
+        global stable_block_x
+
         self.pub_block_location.publish(self.block_location)
-        self.get_logger().info(f'Publishing block location of: X: {self.block_location.x} | Y: {self.block_location.y}'
-                               f' | Z: {self.block_location.z}')
+        #self.get_logger().info(f'Publishing block location of: X: {self.block_location.x} | Y: {self.block_location.y}' # <=================================
+        #                       f' | Z: {self.block_location.z}')
 
         # Broadcast transform between camera and object frame
         transform_object_to_camera = TransformStamped()
@@ -324,14 +336,45 @@ class ImageSubscriber(Node):
         frame2 = 'object_frame'
 
         try:
-            x = self.tf_buffer.can_transform(frame1, frame2, rclpy.time.Time(), rclpy.duration.Duration(seconds=1))
+            wait = self.tf_buffer.can_transform(frame1, frame2, rclpy.time.Time(), rclpy.duration.Duration(seconds=1))
             position = self.tf_buffer.lookup_transform(frame1, frame2, rclpy.time.Time())
-            self.get_logger().info(str(position.transform.translation))
+
+            # self.get_logger().info(str(position.transform.translation))                                                # <=================================
+
+            block_x = position.transform.translation.x
+            block_y = position.transform.translation.y
+            block_z = position.transform.translation.z
+
+            print(f"block_x: {block_x}\nblock_y: {block_y}\nblock_z: {block_z}")
+
+            # Check if block is within range of robot arm
+            if 0.1 > block_x > -0.1 and 0.5 > block_z > -0.5:
+                print("BLOCK FOUND WITHIN RANGE OF ARM")
+
+                # Check if the block is stable and not moving (within 5mm)
+                if abs(block_x - stable_block_x) <= (5 * 1000) and abs(block_z - stable_block_z) <= (5 * 1000):
+                    block_stable += 1
+                    print(f"BLOCK REMAINED STABLE FOR: {block_stable}")
+                else:
+                    print("BLOCK NOT STABLE, RESET STABLE VARIABLE")
+                    block_stable = 0
+
+                # Check if after 10 tics of the publisher if the block has remained stable.
+                if block_stable > 10:
+                    params = [str(block_x),
+                              str(block_y),
+                              str(block_z)]
+
+                    script_path = os.path.expanduser('~/test/test.py')
+                    subprocess.Popen(['python3', script_path] + params)
+
+                    block_stable = -20
+
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             self.get_logger().info("Didn't TF")
 
     def rgb_callback(self, rgb_data: Image):
-        self.get_logger().info('Receiving rgb video frame')
+        # self.get_logger().info('Receiving rgb video frame')                                                            # <=================================
         rgb_image = self.cv_bridge.imgmsg_to_cv2(rgb_data, 'bgr8')
         self.rgb = rgb_image
 
@@ -345,14 +388,13 @@ class ImageSubscriber(Node):
             print("Waiting on intrinsics")
 
     def depth_callback(self, depth_data: Image):
-        self.get_logger().info('Receiving depth video frame')
+        # self.get_logger().info('Receiving depth video frame')                                                          # <=================================
         depth_image = self.cv_bridge.imgmsg_to_cv2(depth_data, depth_data.encoding)
         self.depth = depth_image
 
     def image_depth_info_callback(self, camera_info: CameraInfo):
         try:
             if self.intrinsics:
-                print(f"INTRINSICS: {self.intrinsics} !!!!!!!!!!!!!!!!!!!")
                 return
             self.intrinsics = rs2.intrinsics()
             self.intrinsics.width = camera_info.width

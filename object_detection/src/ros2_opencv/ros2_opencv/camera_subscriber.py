@@ -3,32 +3,29 @@ import cv2
 import numpy as np
 import pyrealsense2 as rs2
 import math
-
-import tf2_ros
-import tf2_geometry_msgs
-
-from decimal import Decimal, ROUND_HALF_UP
-from rclpy.node import Node
-from rclpy import time, duration
-from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import Point, TransformStamped, Vector3
-from cv_bridge import CvBridge, CvBridgeError
-
 import os
 import subprocess
+import tf2_ros
+
+from rclpy.node import Node
+from rclpy import time, duration
+from decimal import Decimal, ROUND_HALF_UP
+from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import Image, CameraInfo
+from geometry_msgs.msg import Point, TransformStamped, Vector3
 
 # Global variables to easily change when needed.
 
 # Bounds for saturation finding
 LOWER_BOUND_VALUE = 100
 UPPER_SATURATION_BOUND = 255
-LOWER_SATURATION_BOUND = 140  # 140
+LOWER_SATURATION_BOUND = 140  # Default: 140
 
 # Distance from the ground to the camera
-camera_to_ground = 20
+camera_to_ground = 627
 
 # The tolerance range when a saturation value is found
-TOLERANCE = 50  # 60
+TOLERANCE = 50  # Default: 60
 
 # Distance to block 2D array to get an average reading
 distance_to_block = np.zeros((5, 5))
@@ -38,7 +35,7 @@ index = 0
 object_close = 0
 
 block_stable = 0
-stable_block_z = 0
+stable_block_y = 0
 stable_block_x = 0
 
 def print_text_center(text, image):
@@ -91,7 +88,7 @@ def location_of_red_block(hsv_image):
 
         # Check if the contour given is 'big enough' this value can be changed to increase range, but also noise.
         for cnt in contours:
-            if cnt.shape[0] > 1:  # <--- Change this integer | smaller = smaller object detection | default: 30
+            if cnt.shape[0] > 30:  # <--- Change this integer | smaller = smaller object detection | default: 30
                 contours_count += 1
 
         # Checks if there are any contours.
@@ -220,6 +217,8 @@ def object_detection(image, depth, intrinsics):
             y_temp = np.mean(distance) * ((v - intrinsics.ppy) / intrinsics.fy)
             z_temp = np.mean(distance)  # np.sqrt(np.abs((390**2) - np.mean(distance)**2))
 
+            print(f"Distance Reading: {z_temp}")
+
             # print(f'x_temp: {x_temp} | y_temp: {y_temp} | z_temp: {z_temp}')
 
             # Do additional math such as centering offset and angle of camera
@@ -272,14 +271,16 @@ class ImageSubscriber(Node):
 
         self.cv_bridge = CvBridge()
 
+        # Manually set the transform between the camera and robot arm
         transform_camera_to_robot_base = TransformStamped()
         transform_camera_to_robot_base.header.stamp = self.get_clock().now().to_msg()
         transform_camera_to_robot_base.header.frame_id = 'px150/base_link'
         transform_camera_to_robot_base.child_frame_id = 'realsense/camera_frame'
         transform_camera_to_robot_base.transform.translation = Vector3(x=0.0,
-                                                                       y=0.0,
-                                                                       z=0.0)
-        # x=0.0, y=0.7, z=0.58
+                                                                       y=-0.09,
+                                                                       z=0.46)
+        # Default: x=0.0, y=-0.09, z=0.46
+        # -90mm in y, 460mm in z
 
         self.tf_broadcaster.sendTransform(transform_camera_to_robot_base)
 
@@ -315,29 +316,32 @@ class ImageSubscriber(Node):
 
     def publish_block_location(self):
         global block_stable
-        global stable_block_z
+        global stable_block_y
         global stable_block_x
 
+        px150_frame = 'px150/base_link'
+        camera_frame = 'realsense/camera_frame'
+        object_frame = 'object_frame'
+
         self.pub_block_location.publish(self.block_location)
-        #self.get_logger().info(f'Publishing block location of: X: {self.block_location.x} | Y: {self.block_location.y}' # <=================================
-        #                       f' | Z: {self.block_location.z}')
+        self.get_logger().info(f'Publishing block location of: X: {self.block_location.x} | Y: {self.block_location.y}' # <=================================
+                               f' | Z: {self.block_location.z}')
 
         # Broadcast transform between camera and object frame
         transform_object_to_camera = TransformStamped()
         transform_object_to_camera.header.stamp = self.get_clock().now().to_msg()
-        transform_object_to_camera.header.frame_id = 'realsense/camera_frame'
-        transform_object_to_camera.child_frame_id = 'object_frame'
-        transform_object_to_camera.transform.translation = Vector3(x=-(self.block_location.x/1000),
-                                                                   y=-(self.block_location.z/1000),
-                                                                   z=-(camera_to_ground/1000))
+        transform_object_to_camera.header.frame_id = camera_frame
+        transform_object_to_camera.child_frame_id = object_frame
+        transform_object_to_camera.transform.translation = Vector3(x=(self.block_location.x/1000),
+                                                                   y=(self.block_location.z/1000),
+                                                                   z=(camera_to_ground/1000))
         self.tf_broadcaster.sendTransform(transform_object_to_camera)
 
-        frame1 = 'px150/base_link'
-        frame2 = 'object_frame'
-
         try:
-            wait = self.tf_buffer.can_transform(frame1, frame2, rclpy.time.Time(), rclpy.duration.Duration(seconds=1))
-            position = self.tf_buffer.lookup_transform(frame1, frame2, rclpy.time.Time())
+
+            wait = self.tf_buffer.can_transform(px150_frame, object_frame, rclpy.time.Time(),
+                                                rclpy.duration.Duration(seconds=1))
+            position = self.tf_buffer.lookup_transform(px150_frame, object_frame, rclpy.time.Time())
 
             # self.get_logger().info(str(position.transform.translation))                                                # <=================================
 
@@ -348,15 +352,17 @@ class ImageSubscriber(Node):
             print(f"block_x: {block_x}\nblock_y: {block_y}\nblock_z: {block_z}")
 
             # Check if block is within range of robot arm
-            if 0.1 > block_x > -0.1 and 0.5 > block_z > -0.5:
+            if -0.1 < block_x < 0.1 < block_y < 0.5:
                 print("BLOCK FOUND WITHIN RANGE OF ARM")
 
                 # Check if the block is stable and not moving (within 5mm)
-                if abs(block_x - stable_block_x) <= (5 * 1000) and abs(block_z - stable_block_z) <= (5 * 1000):
+                if abs(block_x - stable_block_x) <= (5 / 1000) and abs(block_y - stable_block_y) <= (5 / 1000):
                     block_stable += 1
                     print(f"BLOCK REMAINED STABLE FOR: {block_stable}")
                 else:
                     print("BLOCK NOT STABLE, RESET STABLE VARIABLE")
+                    stable_block_x = block_x
+                    stable_block_y = block_y
                     block_stable = 0
 
                 # Check if after 10 tics of the publisher if the block has remained stable.
@@ -365,13 +371,20 @@ class ImageSubscriber(Node):
                               str(block_y),
                               str(block_z)]
 
+                    # ~/interbotix_ws/src/interbotix_ros_manipulators/interbotix_ros_xsarms/interbotix_xsarm_control/demos/python_ros2_api/bartender.py
+
                     script_path = os.path.expanduser('~/test/test.py')
                     subprocess.Popen(['python3', script_path] + params)
 
                     block_stable = -20
+            else:
+                print("BLOCK NOT WITHIN ARM RANGE")
+                stable_block_x = block_x
+                stable_block_y = block_y
+                block_stable = 0
 
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            self.get_logger().info("Didn't TF")
+            self.get_logger().info(f"Didn't find transform: {e}")
 
     def rgb_callback(self, rgb_data: Image):
         # self.get_logger().info('Receiving rgb video frame')                                                            # <=================================

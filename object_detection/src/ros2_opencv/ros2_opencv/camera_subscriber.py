@@ -3,28 +3,29 @@ import cv2
 import numpy as np
 import pyrealsense2 as rs2
 import math
+
 import tf2_ros
 import tf2_geometry_msgs
 
 from decimal import Decimal, ROUND_HALF_UP
 from rclpy.node import Node
+from rclpy import time, duration
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import Point, TransformStamped, Vector3
 from cv_bridge import CvBridge, CvBridgeError
-
 
 # Global variables to easily change when needed.
 
 # Bounds for saturation finding
 LOWER_BOUND_VALUE = 100
 UPPER_SATURATION_BOUND = 255
-LOWER_SATURATION_BOUND = 130  # 140
+LOWER_SATURATION_BOUND = 140  # 140
 
 # Distance from the ground to the camera
-camera_to_ground = 580
+camera_to_ground = 20
 
 # The tolerance range when a saturation value is found
-TOLERANCE = 60
+TOLERANCE = 50  # 60
 
 # Distance to block 2D array to get an average reading
 distance_to_block = np.zeros((5, 5))
@@ -84,7 +85,7 @@ def location_of_red_block(hsv_image):
 
         # Check if the contour given is 'big enough' this value can be changed to increase range, but also noise.
         for cnt in contours:
-            if cnt.shape[0] > 30:  # <--- Change this integer
+            if cnt.shape[0] > 1:  # <--- Change this integer | smaller = smaller object detection | default: 30
                 contours_count += 1
 
         # Checks if there are any contours.
@@ -153,8 +154,8 @@ def object_detection(image, depth, intrinsics):
             x_coordinate = int(x + w // 2)
             y_coordinate = int(y + h)  # int(y + h // 2)
 
-            if y_coordinate == 720:
-                y_coordinate = 719
+            if y_coordinate == 480:
+                y_coordinate = 479
 
             # Print rectangle to screen
             rect_frame = cv2.rectangle(image, (x, y),
@@ -256,13 +257,23 @@ class ImageSubscriber(Node):
         self.rgb = None
         self.depth = None
         self.intrinsics = None
-        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+        self.tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         self.block_location = Point()
         self.block_location.x = 0.0
-        self.depth_to_colour = np.array([[9.99817193e-01, -1.88460015e-02, -3.22036049e-03, 1.50303664e-02],
-                                         [1.88331511e-02, 9.99814749e-01, -3.97486798e-03, 7.80561604e-05],
-                                         [3.29467421e-03, 3.91349196e-03, 9.99986887e-01, -1.31010456e-05]])
+
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
         self.cv_bridge = CvBridge()
+
+        transform_camera_to_robot_base = TransformStamped()
+        transform_camera_to_robot_base.header.stamp = self.get_clock().now().to_msg()
+        transform_camera_to_robot_base.header.frame_id = 'px150/base_link'
+        transform_camera_to_robot_base.child_frame_id = 'realsense/camera_frame'
+        transform_camera_to_robot_base.transform.translation = Vector3(x=0.0,
+                                                                       y=0.7,
+                                                                       z=0.58)  # Translation of 700mm in the y
+        self.tf_broadcaster.sendTransform(transform_camera_to_robot_base)
 
         # Subscribe to RGB image
         self.sub = self.create_subscription(
@@ -292,29 +303,32 @@ class ImageSubscriber(Node):
             msg_type=Point,
             topic='/block/location',
             qos_profile=10)
-        self.timer = self.create_timer(1, self.publish_block_location)
+        self.timer = self.create_timer(0.1, self.publish_block_location)
 
     def publish_block_location(self):
         self.pub_block_location.publish(self.block_location)
         self.get_logger().info(f'Publishing block location of: X: {self.block_location.x} | Y: {self.block_location.y}'
                                f' | Z: {self.block_location.z}')
 
-        transform_camera_to_robot_base = TransformStamped()
-        transform_camera_to_robot_base.header.stamp = self.get_clock().now().to_msg()
-        transform_camera_to_robot_base.header.frame_id = 'robot_base'
-        transform_camera_to_robot_base.child_frame_id = 'camera_frame'
-        transform_camera_to_robot_base.transform.translation = Vector3(x=0.0, y=0.7, z=0.0)
-        self.tf_broadcaster.sendTransform(transform_camera_to_robot_base)
-
         # Broadcast transform between camera and object frame
         transform_object_to_camera = TransformStamped()
         transform_object_to_camera.header.stamp = self.get_clock().now().to_msg()
-        transform_object_to_camera.header.frame_id = 'camera_frame'
+        transform_object_to_camera.header.frame_id = 'realsense/camera_frame'
         transform_object_to_camera.child_frame_id = 'object_frame'
-        transform_object_to_camera.transform.translation = Vector3(x=-self.block_location.x, y=-self.block_location.z,
-                                                                   z=-camera_to_ground)
-        # transform_object_to_camera.transform.rotation.w = 1.0  # No rotation
+        transform_object_to_camera.transform.translation = Vector3(x=-(self.block_location.x/1000),
+                                                                   y=-(self.block_location.z/1000),
+                                                                   z=-(camera_to_ground/1000))
         self.tf_broadcaster.sendTransform(transform_object_to_camera)
+
+        frame1 = 'px150/base_link'
+        frame2 = 'object_frame'
+
+        try:
+            x = self.tf_buffer.can_transform(frame1, frame2, rclpy.time.Time(), rclpy.duration.Duration(seconds=1))
+            position = self.tf_buffer.lookup_transform(frame1, frame2, rclpy.time.Time())
+            self.get_logger().info(str(position.transform.translation))
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            self.get_logger().info("Didn't TF")
 
     def rgb_callback(self, rgb_data: Image):
         self.get_logger().info('Receiving rgb video frame')
@@ -325,7 +339,6 @@ class ImageSubscriber(Node):
         if self.depth is not None and self.intrinsics is not None:
             self.block_location.x, self.block_location.y, self.block_location.z = object_detection(self.rgb, self.depth,
                                                                                                    self.intrinsics)
-
         elif self.depth is None:
             print("Waiting on depth image")
         elif self.intrinsics is None:
@@ -339,6 +352,7 @@ class ImageSubscriber(Node):
     def image_depth_info_callback(self, camera_info: CameraInfo):
         try:
             if self.intrinsics:
+                print(f"INTRINSICS: {self.intrinsics} !!!!!!!!!!!!!!!!!!!")
                 return
             self.intrinsics = rs2.intrinsics()
             self.intrinsics.width = camera_info.width
